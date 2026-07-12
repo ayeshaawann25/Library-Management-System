@@ -1,0 +1,167 @@
+using System;
+using System.Data;
+using Microsoft.Data.SqlClient;
+using System.Windows.Forms;
+
+namespace LibraryManagementSystem
+{
+    public partial class Form4 : Form
+    {
+        private readonly string connectionString =
+            @"Data Source=.\SQLEXPRESS;Initial Catalog=LibraryDB;
+              Integrated Security=True;TrustServerCertificate=True";
+
+        public Form4()
+        {
+            InitializeComponent();
+
+            btnIssue.Click += btnIssue_Click;
+            btnReturn.Click += btnReturn_Click;
+            LoadTransactions();
+            LoadBooks();
+            LoadMembers();
+        }
+
+        private void LoadBooks()
+        {
+            using SqlConnection con = new SqlConnection(connectionString);
+            using SqlDataAdapter da = new SqlDataAdapter(
+                "SELECT BookId, Title + ' (' + CAST(Available AS VARCHAR) + ' available)' AS DisplayText FROM Books WHERE Available > 0", con);
+            DataTable dt = new DataTable();
+            da.Fill(dt);
+            cmbBook.DataSource = dt;
+            cmbBook.DisplayMember = "DisplayText";
+            cmbBook.ValueMember = "BookId";
+        }
+
+        private void LoadMembers()
+        {
+            using SqlConnection con = new SqlConnection(connectionString);
+            using SqlDataAdapter da = new SqlDataAdapter(
+                "SELECT MemberId, FullName FROM Members", con);
+            DataTable dt = new DataTable();
+            da.Fill(dt);
+            cmbMember.DataSource = dt;
+            cmbMember.DisplayMember = "FullName";
+            cmbMember.ValueMember = "MemberId";
+        }
+
+        private void LoadTransactions()
+        {
+            using SqlConnection con = new SqlConnection(connectionString);
+            using SqlDataAdapter da = new SqlDataAdapter(
+                @"SELECT t.TransactionId, m.FullName AS Member, b.Title AS Book, 
+                         t.IssueDate, t.ReturnDate, 
+                         CASE WHEN t.ReturnDate IS NULL THEN 'Issued' ELSE 'Returned' END AS Status
+                  FROM Transactions t
+                  JOIN Members m ON t.MemberId = m.MemberId
+                  JOIN Books b ON t.BookId = b.BookId
+                  ORDER BY t.TransactionId DESC", con);
+            DataTable dt = new DataTable();
+            da.Fill(dt);
+            dgvTransactions.DataSource = dt;
+        }
+
+        private void btnIssue_Click(object sender, EventArgs e)
+        {
+            int bookId = Convert.ToInt32(cmbBook.SelectedValue);
+            int memberId = Convert.ToInt32(cmbMember.SelectedValue);
+
+            if (bookId <= 0 || memberId <= 0)
+            {
+                MessageBox.Show("Please select a book and member.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                using SqlConnection con = new SqlConnection(connectionString);
+                con.Open();
+                using SqlTransaction tran = con.BeginTransaction();
+
+                // Insert transaction
+                using SqlCommand cmd = new SqlCommand(
+                    @"INSERT INTO Transactions (BookId, MemberId, IssueDate)
+                      VALUES (@bookId, @memberId, @date)", con, tran);
+                cmd.Parameters.AddWithValue("@bookId", bookId);
+                cmd.Parameters.AddWithValue("@memberId", memberId);
+                cmd.Parameters.AddWithValue("@date", dtpIssue.Value);
+                cmd.ExecuteNonQuery();
+
+                // Update book availability
+                using SqlCommand cmdUpdate = new SqlCommand(
+                    "UPDATE Books SET Available = Available - 1 WHERE BookId = @id", con, tran);
+                cmdUpdate.Parameters.AddWithValue("@id", bookId);
+                cmdUpdate.ExecuteNonQuery();
+
+                tran.Commit();
+                LoadTransactions();
+                LoadBooks();
+                MessageBox.Show("Book issued successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnReturn_Click(object sender, EventArgs e)
+        {
+            if (dgvTransactions.SelectedRows.Count == 0)
+            {
+                MessageBox.Show("Please select a transaction to return.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var row = dgvTransactions.SelectedRows[0];
+            int transactionId = Convert.ToInt32(row.Cells["TransactionId"].Value);
+            string status = row.Cells["Status"].Value.ToString();
+
+            if (status == "Returned")
+            {
+                MessageBox.Show("This book has already been returned.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                // Get book id from transaction
+                int bookId = 0;
+                using (SqlConnection con = new SqlConnection(connectionString))
+                {
+                    using SqlCommand cmd = new SqlCommand(
+                        "SELECT BookId FROM Transactions WHERE TransactionId = @id", con);
+                    cmd.Parameters.AddWithValue("@id", transactionId);
+                    con.Open();
+                    bookId = Convert.ToInt32(cmd.ExecuteScalar());
+                }
+
+                using SqlConnection con = new SqlConnection(connectionString);
+                con.Open();
+                using SqlTransaction tran = con.BeginTransaction();
+
+                // Update transaction
+                using SqlCommand cmd = new SqlCommand(
+                    "UPDATE Transactions SET ReturnDate = @date WHERE TransactionId = @id", con, tran);
+                cmd.Parameters.AddWithValue("@date", dtpReturn.Value);
+                cmd.Parameters.AddWithValue("@id", transactionId);
+                cmd.ExecuteNonQuery();
+
+                // Update book availability
+                using SqlCommand cmdUpdate = new SqlCommand(
+                    "UPDATE Books SET Available = Available + 1 WHERE BookId = @id", con, tran);
+                cmdUpdate.Parameters.AddWithValue("@id", bookId);
+                cmdUpdate.ExecuteNonQuery();
+
+                tran.Commit();
+                LoadTransactions();
+                LoadBooks();
+                MessageBox.Show("Book returned successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error: {ex.Message}", "Database Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+}
