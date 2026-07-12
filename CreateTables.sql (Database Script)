@@ -1,0 +1,56 @@
+-- Run this in SQL Server Management Studio or Visual Studio SQL Server Object Explorer
+
+-- Create Database
+CREATE DATABASE LibraryDB;
+GO
+
+USE LibraryDB;
+GO
+
+-- Books Table
+CREATE TABLE Books (
+    BookId INT PRIMARY KEY IDENTITY(1,1),
+    Title NVARCHAR(200) NOT NULL,
+    Author NVARCHAR(100) NOT NULL,
+    ISBN NVARCHAR(50) UNIQUE NOT NULL,
+    Category NVARCHAR(50) NOT NULL,
+    Quantity INT DEFAULT 0,
+    Available INT DEFAULT 0
+);
+GO
+
+-- Members Table
+CREATE TABLE Members (
+    MemberId INT PRIMARY KEY IDENTITY(1,1),
+    FullName NVARCHAR(100) NOT NULL,
+    Email NVARCHAR(100) UNIQUE NOT NULL,
+    Phone NVARCHAR(20) NOT NULL,
+    Address NVARCHAR(200),
+    MembershipDate DATE DEFAULT GETDATE()
+);
+GO
+
+-- Transactions Table
+CREATE TABLE Transactions (
+    TransactionId INT PRIMARY KEY IDENTITY(1,1),
+    BookId INT FOREIGN KEY REFERENCES Books(BookId),
+    MemberId INT FOREIGN KEY REFERENCES Members(MemberId),
+    IssueDate DATE NOT NULL,
+    ReturnDate DATE NULL
+);
+GO
+
+-- Sample Data
+INSERT INTO Books (Title, Author, ISBN, Category, Quantity, Available) VALUES
+('The Great Gatsby', 'F. Scott Fitzgerald', '978-0-7432-7356-5', 'Fiction', 5, 5),
+('To Kill a Mockingbird', 'Harper Lee', '978-0-06-112008-4', 'Fiction', 3, 3),
+('1984', 'George Orwell', '978-0-452-28423-4', 'Fiction', 4, 4),
+('Pride and Prejudice', 'Jane Austen', '978-0-14-143951-8', 'Literature', 2, 2),
+('The Catcher in the Rye', 'J.D. Salinger', '978-0-316-76948-0', 'Fiction', 3, 3);
+GO
+
+INSERT INTO Members (FullName, Email, Phone, Address, MembershipDate) VALUES
+('Ayesha Khan', 'ayesha@email.com', '0300-1234567', 'Lahore, Pakistan', '2024-01-15'),
+('Bilal Ahmed', 'bilal@email.com', '0301-2345678', 'Karachi, Pakistan', '2024-02-01'),
+('Fatima Ali', 'fatima@email.com', '0302-3456789', 'Islamabad, Pakistan', '2024-03-10');
+GO
